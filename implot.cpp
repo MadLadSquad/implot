@@ -580,8 +580,8 @@ ImVec2 CalcLegendSize(ImPlotItemGroup& items, const ImVec2& pad, const ImVec2& s
     return legend_size;
 }
 
-int LegendSortingComp(void* _items, const void* _a, const void* _b) {
-    ImPlotItemGroup* items = (ImPlotItemGroup*)_items;
+int LegendSortingComp(const void* _a, const void* _b) {
+    ImPlotItemGroup* items = GImPlot->SortItems;
     const int a = *(const int*)_a;
     const int b = *(const int*)_b;
     const char* label_a = items->GetLegendLabel(a);
@@ -603,18 +603,18 @@ bool ShowLegendEntries(ImPlotItemGroup& items, const ImRect& legend_bb, bool hov
     const int num_items = items.GetLegendCount();
     if (num_items < 1)
         return hovered;
-    // ImVector<int>& indices = GImPlot->TempInt1;
-    // indices.resize(num_items);
-    // // bool sort = true;
-    // // if (sort && num_items > 1) {
-    // //     qsort_s(indices.Data, num_items, sizeof(int), LegendSortingComp, &items);
-    // // }
-    // // else {
-    // //     for (int i = 0; i < num_items; ++i)
-    // //         indices[i] = i;
-    // // }
+    // build render order
+    ImVector<int>& indices = GImPlot->TempInt1;
+    indices.resize(num_items);
+    for (int i = 0; i < num_items; ++i)
+        indices[i] = i;
+    if (ImHasFlag(items.Legend.Flags, ImPlotLegendFlags_Sort) && num_items > 1) {
+        GImPlot->SortItems = &items;
+        qsort(indices.Data, num_items, sizeof(int), LegendSortingComp);
+    }
+    // render
     for (int i = 0; i < num_items; ++i) {
-        const int idx           = i; //indices[i];
+        const int idx           = indices[i];
         ImPlotItem* item        = items.GetLegendItem(idx);
         const char* label       = items.GetLegendLabel(idx);
         const float label_width = ImGui::CalcTextSize(label, NULL, true).x;
@@ -1193,7 +1193,7 @@ void Locator_Time(ImPlotTicker& ticker, const ImPlotRange& range, float pixels, 
     (void)vertical;
     // get units for level 0 and level 1 labels
     const ImPlotTimeUnit unit0 = GetUnitForRange(range.Size() / (pixels / 100)); // level = 0 (top)
-    const ImPlotTimeUnit unit1 = unit0 + 1;                                          // level = 1 (bottom)
+    const ImPlotTimeUnit unit1 = ImClamp(unit0 + 1, 0, ImPlotTimeUnit_COUNT-1);  // level = 1 (bottom)
     // get time format specs
     const ImPlotDateTimeSpec fmt0 = GetDateTimeFmt(TimeFormatLevel0, unit0);
     const ImPlotDateTimeSpec fmt1 = GetDateTimeFmt(TimeFormatLevel1, unit1);
